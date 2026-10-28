@@ -28,10 +28,10 @@
     cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
   .map-btn:active { background: #eee; }
-  #btnLocate { right: 10px; bottom: 95px; }
-  #btnLayer  { right: 10px; bottom: 45px; }
+  #btnLocate { right: 10px; top: 50%; margin-top: -21px; }
+  #btnLayer  { right: 10px; top: 50%; margin-top: 40px; }
   #searchBox {
-    position: absolute; z-index: 500; top: 10px; left: 10px; right: 10px;
+    position: absolute; z-index: 500; top: 10px; left: 10px; right: 60px;
     display: flex; gap: 6px;
   }
   #searchInput {
@@ -42,19 +42,19 @@
   #btnSearch {
     background: #1976d2; color: #fff; border: none; border-radius: 50%;
     width: 44px; height: 44px; font-size: 18px; cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3); flex-shrink: 0;
   }
   #searchResults {
-    position: absolute; z-index: 600; top: 60px; left: 10px; right: 10px;
+    position: absolute; z-index: 600; top: 60px; left: 10px; right: 60px;
     background: #fff; border-radius: 10px; max-height: 220px; overflow-y: auto;
     box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: none;
   }
-  .search-item {
-    padding: 10px 14px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px;
-  }
+  .search-item { padding: 10px 14px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px; }
   .search-item:active { background: #f0f0f0; }
   .search-item:last-child { border-bottom: none; }
+
+  /* Zoom control xuống góc phải dưới, không che ô tìm kiếm */
+  .leaflet-bottom.leaflet-right { bottom: 50%; margin-bottom: -60px; margin-right: 55px; }
 
   .tabs { display: flex; background: #fff; border-bottom: 1px solid #ddd; }
   .tabs button { flex: 1; padding: 12px; border: none; background: none; font-size: 14px; }
@@ -70,6 +70,7 @@
   .btn { padding: 10px 16px; border: none; border-radius: 6px; background: #1976d2; color: #fff; font-size: 15px; }
   .btn.gray { background: #888; }
   .btn.red { background: #e53935; }
+  .btn.green { background: #43a047; }
   .legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; margin-top: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -78,6 +79,8 @@
   .list-actions button { flex: 1; padding: 6px; font-size: 13px; border: none; border-radius: 5px; }
   .section-title { font-weight: bold; margin: 14px 0 8px; color: #333; }
   .hidden { display: none; }
+  .edit-mode { background: #fff8e1 !important; border: 2px solid #ffc107 !important; }
+  .hint { font-size: 11px; color: #888; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -105,17 +108,15 @@
 
     <!-- Ô tìm kiếm -->
     <div id="searchBox">
-      <input id="searchInput" placeholder="🔍 Tìm địa chỉ, địa điểm..."
+      <input id="searchInput" placeholder="🔍 Tìm địa chỉ..." 
              onkeydown="if(event.key==='Enter') searchPlace()">
       <button id="btnSearch" onclick="searchPlace()">🔍</button>
     </div>
     <div id="searchResults"></div>
 
-    <!-- Nút định vị -->
+    <!-- Nút định vị + đổi lớp -->
     <button class="map-btn" id="btnLocate" onclick="locateMe()" title="Vị trí hiện tại">🎯</button>
-
-    <!-- Nút đổi lớp bản đồ -->
-    <button class="map-btn" id="btnLayer" onclick="toggleLayer()" title="Đổi bản đồ/vệ tinh">🗺️</button>
+    <button class="map-btn" id="btnLayer" onclick="toggleLayer()" title="Đổi lớp bản đồ">🗺️</button>
   </div>
 
   <div class="tabs">
@@ -132,22 +133,20 @@
       <span><i class="dot" style="background:#43a047"></i> Có thể thu</span>
       <span><i class="dot" style="background:#fdd835"></i> Sắp quá hạn</span>
       <span><i class="dot" style="background:#e53935"></i> Quá hạn</span>
-      <span><i class="dot" style="background:#fb8c00"></i> Huỷ / không thu</span>
+      <span><i class="dot" style="background:#fb8c00"></i> Huỷ</span>
     </div>
 
-    <div class="card">
-      <div class="section-title">➕ Thêm khách hàng</div>
+    <div class="card" id="customerFormCard">
+      <div class="section-title" id="customerFormTitle">➕ Thêm khách hàng</div>
       <div class="form-group"><label>Tên khách hàng</label><input id="cName"></div>
       <div class="form-group"><label>Số điện thoại</label><input id="cPhone" type="tel"></div>
       <div class="form-group"><label>Gói cước</label><select id="cPackage"></select></div>
       <div class="form-group"><label>Tập điểm</label><select id="cPoint"></select></div>
       <div class="form-group">
-        <label>Toạ độ (vĩ độ, kinh độ)</label>
-        <div style="display:flex;gap:6px">
-          <input id="cLat" placeholder="Vĩ độ (lat)" style="flex:1">
-          <input id="cLng" placeholder="Kinh độ (lng)" style="flex:1">
-        </div>
-        <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation()">📍 Lấy vị trí hiện tại</button>
+        <label>Toạ độ</label>
+        <input id="cCoord" placeholder="VD: (10.2563648, 106.3661320) hoặc 10.2563648,106.3661320">
+        <div class="hint">Dán từ Google Maps, có dấu ngoặc hay không đều được</div>
+        <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation('c')">📍 Lấy vị trí hiện tại</button>
       </div>
       <div class="form-group"><label>Ngày cần thu bill</label><input id="cBillDate" type="date"></div>
       <div class="form-group"><label>Trạng thái</label>
@@ -157,7 +156,8 @@
           <option value="cancelled">Huỷ / không thu được</option>
         </select>
       </div>
-      <button class="btn" style="width:100%" onclick="addCustomer()">Lưu khách hàng</button>
+      <button class="btn" style="width:100%" id="cSubmitBtn" onclick="submitCustomer()">Lưu khách hàng</button>
+      <button class="btn gray hidden" style="width:100%;margin-top:6px" id="cCancelBtn" onclick="cancelCustomerEdit()">Huỷ sửa</button>
     </div>
 
     <div class="section-title">📋 Danh sách khách hàng</div>
@@ -166,19 +166,22 @@
 
   <!-- TAB TẬP ĐIỂM -->
   <div id="tab-points" class="tab-content">
-    <div class="card">
-      <div class="section-title">➕ Thêm tập điểm</div>
+    <div class="card" id="pointFormCard">
+      <div class="section-title" id="pointFormTitle">➕ Thêm tập điểm</div>
       <div class="form-group"><label>Tên tập điểm</label><input id="pName" placeholder="VD: Chung cư A, hẻm 5..."></div>
       <div class="form-group">
         <label>Toạ độ</label>
-        <div style="display:flex;gap:6px">
-          <input id="pLat" placeholder="Vĩ độ" style="flex:1">
-          <input id="pLng" placeholder="Kinh độ" style="flex:1">
-        </div>
-        <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocationPoint()">📍 Lấy vị trí hiện tại</button>
+        <input id="pCoord" placeholder="VD: (10.2563648, 106.3661320) hoặc 10.2563648,106.3661320">
+        <div class="hint">Dán từ Google Maps, có dấu ngoặc hay không đều được</div>
+        <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation('p')">📍 Lấy vị trí hiện tại</button>
       </div>
-      <div class="form-group"><label>Hình ảnh</label><input id="pImage" type="file" accept="image/*" capture="environment"></div>
-      <button class="btn" style="width:100%" onclick="addPoint()">Lưu tập điểm</button>
+      <div class="form-group">
+        <label>Hình ảnh</label>
+        <input id="pImage" type="file" accept="image/*" capture="environment">
+        <div id="pImagePreview" style="margin-top:6px"></div>
+      </div>
+      <button class="btn" style="width:100%" id="pSubmitBtn" onclick="submitPoint()">Lưu tập điểm</button>
+      <button class="btn gray hidden" style="width:100%;margin-top:6px" id="pCancelBtn" onclick="cancelPointEdit()">Huỷ sửa</button>
     </div>
 
     <div class="section-title">📌 Danh sách tập điểm</div>
@@ -207,30 +210,26 @@
     </div>
     <div class="card">
       <div class="section-title">💾 Dữ liệu</div>
-      <button class="btn gray" style="width:100%;margin-bottom:8px" onclick="exportData()">📤 Xuất dữ liệu (backup)</button>
+      <button class="btn gray" style="width:100%;margin-bottom:8px" onclick="exportData()">📤 Xuất dữ liệu</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
       <button class="btn gray" style="width:100%;margin-bottom:8px" onclick="document.getElementById('importFile').click()">📥 Nhập dữ liệu</button>
-      <button class="btn red" style="width:100%" onclick="resetAll()">🗑 Xoá toàn bộ dữ liệu</button>
+      <button class="btn red" style="width:100%" onclick="resetAll()">🗑 Xoá toàn bộ</button>
     </div>
   </div>
 </div>
 
 <script>
-// ==================== QUẢN LÝ TÀI KHOẢN ====================
+// ==================== TÀI KHOẢN ====================
 const AUTH_KEY = 'auth_v1';
 function getAuth() {
   let a = localStorage.getItem(AUTH_KEY);
-  if (!a) {
-    a = JSON.stringify({user:'admin', pass:'123456'});
-    localStorage.setItem(AUTH_KEY, a);
-  }
+  if (!a) { a = JSON.stringify({user:'admin', pass:'123456'}); localStorage.setItem(AUTH_KEY, a); }
   return JSON.parse(a);
 }
 function doLogin() {
   const a = getAuth();
-  const u = document.getElementById('loginUser').value.trim();
-  const p = document.getElementById('loginPass').value;
-  if (u === a.user && p === a.pass) {
+  if (document.getElementById('loginUser').value.trim() === a.user &&
+      document.getElementById('loginPass').value === a.pass) {
     localStorage.setItem('logged', '1');
     showApp();
   } else alert('Sai tài khoản hoặc mật khẩu!');
@@ -250,16 +249,29 @@ function savePassword() {
 }
 
 // ==================== DỮ LIỆU ====================
-const DB = {
-  customers: 'db_customers',
-  points: 'db_points',
-  packages: 'db_packages'
-};
+const DB = { customers:'db_customers', points:'db_points', packages:'db_packages' };
 function load(key, def=[]) {
-  try { return JSON.parse(localStorage.getItem(key)) || def; }
-  catch { return def; }
+  try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; }
 }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+// ==================== PARSE TOẠ ĐỘ ====================
+// Nhận: "(10.25, 106.36)", "10.25,106.36", "10.25 106.36", "10.25; 106.36"
+function parseCoord(str) {
+  if (!str) return null;
+  // Bỏ ngoặc, đổi dấu phẩy/chấm phẩy thành khoảng trắng
+  const cleaned = str.replace(/[()\[\]]/g, ' ').replace(/[,;]/g, ' ').trim();
+  const parts = cleaned.split(/\s+/).filter(x => x);
+  if (parts.length < 2) return null;
+  const lat = parseFloat(parts[0]);
+  const lng = parseFloat(parts[1]);
+  if (isNaN(lat) || isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+function formatCoord(lat, lng) {
+  return `(${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+}
 
 // ==================== BẢN ĐỒ ====================
 let map, markersLayer;
@@ -267,37 +279,62 @@ let layers = {};
 let currentLayer = 'default';
 let userMarker = null, userAccuracy = null;
 let searchMarker = null;
+let tempPinMarker = null;
+let tempPinMode = null; // 'c' hoặc 'p'
 
 function initMap() {
-  map = L.map('map', { zoomControl: true }).setView([10.7769, 106.7009], 12);
+  // zoomControl: false → ta tự đặt vị trí
+  map = L.map('map', { zoomControl: false }).setView([10.7769, 106.7009], 12);
+  // Đặt zoom control góc phải dưới, tách khỏi ô tìm kiếm
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // ---- Bản đồ đường phố: OpenStreetMap (nét đến zoom 19) ----
   layers.default = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    maxNativeZoom: 19,
-    attribution: '© OpenStreetMap'
+    maxZoom: 19, maxNativeZoom: 19, attribution: '© OpenStreetMap'
   });
-
-  // ---- Vệ tinh: Google Satellite (nét đến zoom 20) ----
-  layers.satellite = L.tileLayer(
-    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    maxNativeZoom: 20,
-    attribution: '© Google Satellite'
+  layers.satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 20, maxNativeZoom: 20, attribution: '© Google Satellite'
   });
-
-  // ---- Vệ tinh có nhãn đường ----
   layers.hybrid = L.layerGroup([
-    L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-      maxZoom: 20, maxNativeZoom: 20
-    }),
-    L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', {
-      maxZoom: 20, maxNativeZoom: 20, opacity: 0.8
-    })
+    L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, maxNativeZoom: 20 }),
+    L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', { maxZoom: 20, maxNativeZoom: 20, opacity: 0.8 })
   ]);
 
   layers.default.addTo(map);
   markersLayer = L.layerGroup().addTo(map);
+
+  // Bấm bản đồ để đặt ghim tạm
+  map.on('click', e => {
+    if (!tempPinMode) return;
+    placeTempPin(e.latlng.lat, e.latlng.lng, tempPinMode);
+  });
+}
+
+// Đặt ghim tạm khi bấm bản đồ
+function placeTempPin(lat, lng, mode) {
+  if (tempPinMarker) map.removeLayer(tempPinMarker);
+  const icon = L.divIcon({
+    html: `<div style="background:#e53935;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.6)"></div>`,
+    className: '', iconSize: [26,26], iconAnchor: [13,26]
+  });
+  tempPinMarker = L.marker([lat, lng], {icon}).addTo(map)
+    .bindPopup(`<b>Toạ độ đã chọn</b><br>${formatCoord(lat,lng)}<br>
+      <button onclick="useTempPin('${lat}','${lng}')" style="margin-top:6px;padding:8px 14px;background:#1976d2;color:#fff;border:none;border-radius:5px;font-size:13px">✓ Dùng toạ độ này</button>`)
+    .openPopup();
+  map.setView([lat, lng], Math.max(map.getZoom(), 17));
+}
+
+function useTempPin(lat, lng) {
+  const coordStr = formatCoord(parseFloat(lat), parseFloat(lng));
+  if (tempPinMode === 'p') {
+    document.getElementById('pCoord').value = coordStr;
+    alert('Đã điền toạ độ vào form tập điểm');
+  } else {
+    document.getElementById('cCoord').value = coordStr;
+    alert('Đã điền toạ độ vào form khách hàng');
+  }
+  if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
+  tempPinMode = null;
+  map.closePopup();
 }
 
 function toggleLayer() {
@@ -306,76 +343,73 @@ function toggleLayer() {
   else if (currentLayer === 'hybrid') map.removeLayer(layers.hybrid);
 
   if (currentLayer === 'default') {
-    layers.satellite.addTo(map);
-    currentLayer = 'satellite';
+    layers.satellite.addTo(map); currentLayer = 'satellite';
     document.getElementById('btnLayer').textContent = '🛰️';
-    document.getElementById('btnLayer').title = 'Vệ tinh — bấm để xem có nhãn';
   } else if (currentLayer === 'satellite') {
-    layers.hybrid.addTo(map);
-    currentLayer = 'hybrid';
+    layers.hybrid.addTo(map); currentLayer = 'hybrid';
     document.getElementById('btnLayer').textContent = '📍';
-    document.getElementById('btnLayer').title = 'Vệ tinh có nhãn — bấm để về bản đồ';
   } else {
-    layers.default.addTo(map);
-    currentLayer = 'default';
+    layers.default.addTo(map); currentLayer = 'default';
     document.getElementById('btnLayer').textContent = '🗺️';
-    document.getElementById('btnLayer').title = 'Bản đồ — bấm để xem vệ tinh';
   }
 }
 
-// ----- Định vị vị trí hiện tại -----
 function locateMe() {
-  if (!navigator.geolocation) return alert('Trình duyệt không hỗ trợ GPS');
+  if (!navigator.geolocation) return alert('Không hỗ trợ GPS');
   const btn = document.getElementById('btnLocate');
   btn.textContent = '⏳';
-
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      const acc = pos.coords.accuracy;
-
+      const { latitude:lat, longitude:lng, accuracy:acc } = pos.coords;
       if (userMarker) map.removeLayer(userMarker);
       if (userAccuracy) map.removeLayer(userAccuracy);
-
-      userAccuracy = L.circle([lat, lng], {
-        radius: acc, color: '#1976d2', fillColor: '#2196f3',
-        fillOpacity: 0.15, weight: 1
-      }).addTo(map);
-
+      userAccuracy = L.circle([lat, lng], { radius: acc, color:'#1976d2', fillColor:'#2196f3', fillOpacity:0.15, weight:1 }).addTo(map);
       const icon = L.divIcon({
-        html: `<div style="
-          background:#1976d2;width:20px;height:20px;border-radius:50%;
-          border:3px solid #fff;box-shadow:0 0 0 4px rgba(25,118,210,0.3), 0 2px 6px rgba(0,0,0,0.4);
-        "></div>`,
+        html: `<div style="background:#1976d2;width:20px;height:20px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 4px rgba(25,118,210,0.3),0 2px 6px rgba(0,0,0,.4)"></div>`,
         className: '', iconSize: [20,20], iconAnchor: [10,10]
       });
-      userMarker = L.marker([lat, lng], {icon}).addTo(map)
-        .bindPopup(`<b>📍 Vị trí của bạn</b><br>Độ chính xác: ±${Math.round(acc)} m`)
-        .openPopup();
-
+      userMarker = L.marker([lat,lng],{icon}).addTo(map)
+        .bindPopup(`<b>📍 Vị trí của bạn</b><br>±${Math.round(acc)} m`).openPopup();
       map.setView([lat, lng], 17);
       btn.textContent = '🎯';
     },
-    err => {
-      btn.textContent = '🎯';
-      alert('Không lấy được vị trí:\n' + err.message +
-        '\n\nKiểm tra: Cài đặt iPhone → Safari → Vị trí → Cho phép.');
-    },
+    err => { btn.textContent = '🎯'; alert('Lỗi GPS: ' + err.message); },
     { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
   );
 }
 
-// ----- Tìm kiếm địa chỉ (Nominatim OpenStreetMap) -----
+// ==================== TÌM KIẾM ====================
+function cleanSearchQuery(q) {
+  // Bỏ ngoặc và ký tự thừa nếu người dùng dán toạ độ
+  return q.replace(/[()\[\]]/g, ' ').replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function searchPlace() {
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) return;
+  const raw = document.getElementById('searchInput').value.trim();
+  if (!raw) return;
+
+  // Nếu là toạ độ → bay thẳng tới, không cần gọi Nominatim
+  const coord = parseCoord(raw);
+  if (coord) {
+    if (searchMarker) map.removeLayer(searchMarker);
+    const icon = L.divIcon({
+      html: `<div style="background:#e53935;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>`,
+      className: '', iconSize: [24,24], iconAnchor: [12,24]
+    });
+    searchMarker = L.marker([coord.lat, coord.lng], {icon}).addTo(map)
+      .bindPopup(`<b>Toạ độ đã nhập</b><br>${formatCoord(coord.lat, coord.lng)}<br>
+        <button onclick="useSearchCoord(${coord.lat},${coord.lng})" style="margin-top:6px;padding:6px 10px;background:#1976d2;color:#fff;border:none;border-radius:5px;font-size:12px">Dùng toạ độ này</button>`)
+      .openPopup();
+    map.setView([coord.lat, coord.lng], 17);
+    document.getElementById('searchResults').style.display = 'none';
+    return;
+  }
+
+  const q = cleanSearchQuery(raw);
   const resBox = document.getElementById('searchResults');
   resBox.style.display = 'block';
   resBox.innerHTML = '<div class="search-item">⏳ Đang tìm...</div>';
-
   const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=8&accept-language=vi&q=' + encodeURIComponent(q);
-
   fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(r => r.json())
     .then(data => {
@@ -384,63 +418,51 @@ function searchPlace() {
         return;
       }
       resBox.innerHTML = data.map((item, i) =>
-        `<div class="search-item" onclick="pickSearch(${i})">
-          📍 ${item.display_name}
-        </div>`
+        `<div class="search-item" onclick="pickSearch(${i})">📍 ${item.display_name}</div>`
       ).join('');
       window._searchData = data;
     })
-    .catch(err => {
-      resBox.innerHTML = '<div class="search-item">⚠️ Lỗi kết nối: ' + err.message + '</div>';
-    });
+    .catch(err => { resBox.innerHTML = '<div class="search-item">⚠️ Lỗi: ' + err.message + '</div>'; });
 }
 
 function pickSearch(idx) {
   const item = window._searchData[idx];
   if (!item) return;
-  const lat = parseFloat(item.lat);
-  const lng = parseFloat(item.lon);
-
+  const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
   if (searchMarker) map.removeLayer(searchMarker);
   const icon = L.divIcon({
     html: `<div style="background:#e53935;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>`,
     className: '', iconSize: [24,24], iconAnchor: [12,24]
   });
   searchMarker = L.marker([lat, lng], {icon}).addTo(map)
-    .bindPopup(`<b>${item.display_name}</b><br>
-      <small>${lat.toFixed(6)}, ${lng.toFixed(6)}</small><br>
+    .bindPopup(`<b>${item.display_name}</b><br><small>${formatCoord(lat,lng)}</small><br>
       <button onclick="useSearchCoord(${lat},${lng})" style="margin-top:6px;padding:6px 10px;background:#1976d2;color:#fff;border:none;border-radius:5px;font-size:12px">Dùng toạ độ này</button>`)
     .openPopup();
-
   map.setView([lat, lng], 17);
   document.getElementById('searchResults').style.display = 'none';
 }
 
 function useSearchCoord(lat, lng) {
-  const pointTabActive = document.getElementById('tab-points').classList.contains('active');
-  if (pointTabActive) {
-    document.getElementById('pLat').value = lat.toFixed(6);
-    document.getElementById('pLng').value = lng.toFixed(6);
+  const coordStr = formatCoord(lat, lng);
+  const inPointTab = document.getElementById('tab-points').classList.contains('active');
+  if (inPointTab) {
+    document.getElementById('pCoord').value = coordStr;
     alert('Đã điền toạ độ vào form tập điểm');
   } else {
-    document.getElementById('cLat').value = lat.toFixed(6);
-    document.getElementById('cLng').value = lng.toFixed(6);
+    document.getElementById('cCoord').value = coordStr;
     alert('Đã điền toạ độ vào form khách hàng');
   }
   map.closePopup();
 }
 
-// Ẩn kết quả khi bấm ra ngoài
 document.addEventListener('click', e => {
   const box = document.getElementById('searchResults');
   const input = document.getElementById('searchInput');
   if (!box || !input) return;
-  if (!box.contains(e.target) && e.target !== input) {
-    box.style.display = 'none';
-  }
+  if (!box.contains(e.target) && e.target !== input) box.style.display = 'none';
 });
 
-// ==================== MÀU THEO TRẠNG THÁI ====================
+// ==================== MÀU ====================
 function getColor(c) {
   if (c.status === 'cancelled') return '#fb8c00';
   if (c.status === 'paid') return '#2979ff';
@@ -463,19 +485,17 @@ function refreshAll() {
 }
 
 function renderCustomerOptions() {
-  const packages = load(DB.packages);
-  const points = load(DB.points);
-  const cPackage = document.getElementById('cPackage');
-  const cPoint = document.getElementById('cPoint');
-  cPackage.innerHTML = '<option value="">-- Chọn gói --</option>' +
+  const packages = load(DB.packages), points = load(DB.points);
+  document.getElementById('cPackage').innerHTML = '<option value="">-- Chọn gói --</option>' +
     packages.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  cPoint.innerHTML = '<option value="">-- Không thuộc tập điểm --</option>' +
+  document.getElementById('cPoint').innerHTML = '<option value="">-- Không thuộc tập điểm --</option>' +
     points.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 }
 
 function statusLabel(c) {
   if (c.status === 'cancelled') return '<span class="badge" style="background:#fb8c00">Huỷ</span>';
   if (c.status === 'paid') return '<span class="badge" style="background:#2979ff">Đã đóng</span>';
+  if (!c.billDate) return '';
   const today = new Date(); today.setHours(0,0,0,0);
   const bill = new Date(c.billDate); bill.setHours(0,0,0,0);
   const diff = Math.floor((bill - today) / (1000*60*60*24));
@@ -485,9 +505,7 @@ function statusLabel(c) {
 }
 
 function renderCustomers() {
-  const list = load(DB.customers);
-  const packages = load(DB.packages);
-  const points = load(DB.points);
+  const list = load(DB.customers), packages = load(DB.packages), points = load(DB.points);
   const el = document.getElementById('customerList');
   if (!list.length) { el.innerHTML = '<div class="card"><small>Chưa có khách hàng.</small></div>'; return; }
   const sorted = [...list].sort((a,b) => (a.billDate||'').localeCompare(b.billDate||''));
@@ -499,30 +517,38 @@ function renderCustomers() {
       <small>📞 ${c.phone || '-'}<br>
       📦 ${pkg ? pkg.name : '-'}<br>
       📍 ${pt ? pt.name : '-'}<br>
+      🗺️ ${formatCoord(c.lat, c.lng)}<br>
       📅 ${c.billDate || '-'}</small>
       <div class="list-actions">
-        <button class="btn" style="background:#2979ff" onclick="markPaid('${c.id}')">Đã đóng</button>
+        <button class="btn" style="background:#43a047" onclick="zoomToCustomer('${c.id}')">📍 Xem</button>
+        <button class="btn" style="background:#1976d2" onclick="markPaid('${c.id}')">Đã đóng</button>
         <button class="btn" style="background:#fb8c00" onclick="markCancel('${c.id}')">Huỷ</button>
-        <button class="btn red" onclick="deleteCustomer('${c.id}')">Xoá</button>
+      </div>
+      <div class="list-actions">
+        <button class="btn gray" style="background:#ff9800" onclick="editCustomer('${c.id}')">✏️ Sửa</button>
+        <button class="btn red" onclick="deleteCustomer('${c.id}')">🗑 Xoá</button>
       </div>
     </div>`;
   }).join('');
 }
 
 function renderPoints() {
-  const list = load(DB.points);
-  const customers = load(DB.customers);
+  const list = load(DB.points), customers = load(DB.customers);
   const el = document.getElementById('pointList');
   if (!list.length) { el.innerHTML = '<div class="card"><small>Chưa có tập điểm.</small></div>'; return; }
   el.innerHTML = list.map(p => {
     const count = customers.filter(c => c.pointId === p.id).length;
     return `<div class="card">
       <h4>📌 ${p.name}</h4>
-      <small>Toạ độ: ${p.lat}, ${p.lng}<br>Số KH: ${count}</small>
+      <small>🗺️ ${formatCoord(p.lat, p.lng)}<br>Số KH: ${count}</small>
       ${p.image ? `<div style="margin-top:8px"><img src="${p.image}" style="max-width:100%;border-radius:6px"></div>` : ''}
       <div class="list-actions">
-        <button class="btn" style="background:#43a047" onclick="viewPointCustomers('${p.id}')">Xem KH</button>
-        <button class="btn red" onclick="deletePoint('${p.id}')">Xoá</button>
+        <button class="btn" style="background:#43a047" onclick="zoomToPoint('${p.id}')">📍 Xem</button>
+        <button class="btn" style="background:#1976d2" onclick="viewPointCustomers('${p.id}')">👥 KH</button>
+      </div>
+      <div class="list-actions">
+        <button class="btn" style="background:#ff9800" onclick="editPoint('${p.id}')">✏️ Sửa</button>
+        <button class="btn red" onclick="deletePoint('${p.id}')">🗑 Xoá</button>
       </div>
     </div>`;
   }).join('');
@@ -535,17 +561,14 @@ function renderPackages() {
   el.innerHTML = list.map(p => `<div class="card">
     <h4>📦 ${p.name}</h4>
     <small>${p.price ? Number(p.price).toLocaleString('vi-VN') + ' đ' : 'Chưa đặt giá'}</small>
-    <div class="list-actions">
-      <button class="btn red" onclick="deletePackage('${p.id}')">Xoá</button>
-    </div>
+    <div class="list-actions"><button class="btn red" onclick="deletePackage('${p.id}')">Xoá</button></div>
   </div>`).join('');
 }
 
 function renderMap() {
   if (!markersLayer) return;
   markersLayer.clearLayers();
-  const customers = load(DB.customers);
-  const points = load(DB.points);
+  const customers = load(DB.customers), points = load(DB.points);
 
   points.forEach(p => {
     const icon = L.divIcon({
@@ -569,31 +592,83 @@ function renderMap() {
   });
 }
 
-// ==================== HÀNH ĐỘNG ====================
-function addCustomer() {
+function zoomToCustomer(id) {
+  const c = load(DB.customers).find(x => x.id === id);
+  if (c) map.setView([c.lat, c.lng], 18);
+}
+function zoomToPoint(id) {
+  const p = load(DB.points).find(x => x.id === id);
+  if (p) map.setView([p.lat, p.lng], 18);
+}
+
+// ==================== FORM KHÁCH HÀNG ====================
+let editingCustomerId = null;
+
+function submitCustomer() {
   const name = document.getElementById('cName').value.trim();
   const phone = document.getElementById('cPhone').value.trim();
   const packageId = document.getElementById('cPackage').value;
   const pointId = document.getElementById('cPoint').value;
-  const lat = parseFloat(document.getElementById('cLat').value);
-  const lng = parseFloat(document.getElementById('cLng').value);
+  const coord = parseCoord(document.getElementById('cCoord').value);
   const billDate = document.getElementById('cBillDate').value;
   const status = document.getElementById('cStatus').value;
+
   if (!name) return alert('Nhập tên khách hàng');
-  if (!lat || !lng) return alert('Nhập hoặc lấy toạ độ');
+  if (!coord) return alert('Toạ độ không hợp lệ. VD: (10.2563648, 106.3661320)');
+
   const list = load(DB.customers);
-  list.push({
-    id: 'c_' + Date.now(),
-    name, phone, packageId, pointId, lat, lng, billDate, status
-  });
+  if (editingCustomerId) {
+    const c = list.find(x => x.id === editingCustomerId);
+    if (c) { Object.assign(c, {name, phone, packageId, pointId, lat:coord.lat, lng:coord.lng, billDate, status}); }
+    alert('Đã cập nhật khách hàng');
+  } else {
+    list.push({ id:'c_'+Date.now(), name, phone, packageId, pointId, lat:coord.lat, lng:coord.lng, billDate, status });
+    alert('Đã thêm khách hàng');
+  }
   save(DB.customers, list);
+  resetCustomerForm();
+  refreshAll();
+  // Bay tới khách vừa thêm
+  map.setView([coord.lat, coord.lng], 18);
+}
+
+function resetCustomerForm() {
+  editingCustomerId = null;
   document.getElementById('cName').value = '';
   document.getElementById('cPhone').value = '';
-  document.getElementById('cLat').value = '';
-  document.getElementById('cLng').value = '';
+  document.getElementById('cCoord').value = '';
   document.getElementById('cBillDate').value = '';
-  refreshAll();
+  document.getElementById('cStatus').value = 'pending';
+  document.getElementById('cPackage').value = '';
+  document.getElementById('cPoint').value = '';
+  document.getElementById('customerFormTitle').textContent = '➕ Thêm khách hàng';
+  document.getElementById('cSubmitBtn').textContent = 'Lưu khách hàng';
+  document.getElementById('cCancelBtn').classList.add('hidden');
+  document.getElementById('customerFormCard').classList.remove('edit-mode');
+  tempPinMode = null;
 }
+
+function editCustomer(id) {
+  const c = load(DB.customers).find(x => x.id === id);
+  if (!c) return;
+  editingCustomerId = id;
+  document.getElementById('cName').value = c.name || '';
+  document.getElementById('cPhone').value = c.phone || '';
+  document.getElementById('cPackage').value = c.packageId || '';
+  document.getElementById('cPoint').value = c.pointId || '';
+  document.getElementById('cCoord').value = formatCoord(c.lat, c.lng);
+  document.getElementById('cBillDate').value = c.billDate || '';
+  document.getElementById('cStatus').value = c.status || 'pending';
+  document.getElementById('customerFormTitle').textContent = '✏️ Sửa khách hàng';
+  document.getElementById('cSubmitBtn').textContent = 'Cập nhật';
+  document.getElementById('cCancelBtn').classList.remove('hidden');
+  document.getElementById('customerFormCard').classList.add('edit-mode');
+  document.getElementById('customerFormCard').scrollIntoView({behavior:'smooth'});
+  map.setView([c.lat, c.lng], 18);
+  tempPinMode = 'c';
+}
+
+function cancelCustomerEdit() { resetCustomerForm(); }
 
 function markPaid(id) {
   const list = load(DB.customers);
@@ -611,39 +686,90 @@ function deleteCustomer(id) {
   refreshAll();
 }
 
-function addPoint() {
+// ==================== FORM TẬP ĐIỂM ====================
+let editingPointId = null;
+let editingPointImage = '';
+
+function submitPoint() {
   const name = document.getElementById('pName').value.trim();
-  const lat = parseFloat(document.getElementById('pLat').value);
-  const lng = parseFloat(document.getElementById('pLng').value);
+  const coord = parseCoord(document.getElementById('pCoord').value);
+  if (!name) return alert('Nhập tên tập điểm');
+  if (!coord) return alert('Toạ độ không hợp lệ. VD: (10.2563648, 106.3661320)');
+
   const file = document.getElementById('pImage').files[0];
-  if (!name || !lat || !lng) return alert('Nhập tên và toạ độ');
   const finish = (imgData) => {
     const list = load(DB.points);
-    list.push({ id:'p_'+Date.now(), name, lat, lng, image: imgData || '' });
+    if (editingPointId) {
+      const p = list.find(x => x.id === editingPointId);
+      if (p) { Object.assign(p, {name, lat:coord.lat, lng:coord.lng, image: imgData || p.image || ''}); }
+      alert('Đã cập nhật tập điểm');
+    } else {
+      list.push({ id:'p_'+Date.now(), name, lat:coord.lat, lng:coord.lng, image: imgData || '' });
+      alert('Đã thêm tập điểm');
+    }
     save(DB.points, list);
-    document.getElementById('pName').value = '';
-    document.getElementById('pLat').value = '';
-    document.getElementById('pLng').value = '';
-    document.getElementById('pImage').value = '';
+    resetPointForm();
     refreshAll();
+    map.setView([coord.lat, coord.lng], 18);
   };
   if (file) {
     const reader = new FileReader();
     reader.onload = e => finish(e.target.result);
     reader.readAsDataURL(file);
-  } else finish('');
+  } else finish(editingPointImage);
 }
+
+function resetPointForm() {
+  editingPointId = null;
+  editingPointImage = '';
+  document.getElementById('pName').value = '';
+  document.getElementById('pCoord').value = '';
+  document.getElementById('pImage').value = '';
+  document.getElementById('pImagePreview').innerHTML = '';
+  document.getElementById('pointFormTitle').textContent = '➕ Thêm tập điểm';
+  document.getElementById('pSubmitBtn').textContent = 'Lưu tập điểm';
+  document.getElementById('pCancelBtn').classList.add('hidden');
+  document.getElementById('pointFormCard').classList.remove('edit-mode');
+  tempPinMode = null;
+}
+
+function editPoint(id) {
+  const p = load(DB.points).find(x => x.id === id);
+  if (!p) return;
+  editingPointId = id;
+  editingPointImage = p.image || '';
+  document.getElementById('pName').value = p.name || '';
+  document.getElementById('pCoord').value = formatCoord(p.lat, p.lng);
+  document.getElementById('pImage').value = '';
+  document.getElementById('pImagePreview').innerHTML = p.image
+    ? `<img src="${p.image}" style="max-width:100%;border-radius:6px;margin-top:6px">`
+    : '';
+  document.getElementById('pointFormTitle').textContent = '✏️ Sửa tập điểm';
+  document.getElementById('pSubmitBtn').textContent = 'Cập nhật';
+  document.getElementById('pCancelBtn').classList.remove('hidden');
+  document.getElementById('pointFormCard').classList.add('edit-mode');
+  document.getElementById('pointFormCard').scrollIntoView({behavior:'smooth'});
+  map.setView([p.lat, p.lng], 18);
+  tempPinMode = 'p';
+}
+
+function cancelPointEdit() { resetPointForm(); }
+
 function deletePoint(id) {
   if (!confirm('Xoá tập điểm?')) return;
   save(DB.points, load(DB.points).filter(p => p.id !== id));
   refreshAll();
 }
+
 function viewPointCustomers(id) {
   const customers = load(DB.customers).filter(c => c.pointId === id);
   const p = load(DB.points).find(x => x.id === id);
-  alert((p ? p.name + '\n\n' : '') + (customers.length ? customers.map(c => '• ' + c.name + ' - ' + c.phone).join('\n') : 'Chưa có khách hàng.'));
+  alert((p ? p.name + '\n\n' : '') + (customers.length
+    ? customers.map(c => '• ' + c.name + ' - ' + c.phone).join('\n')
+    : 'Chưa có khách hàng.'));
 }
 
+// ==================== GÓI CƯỚC ====================
 function addPackage() {
   const name = document.getElementById('pkgName').value.trim();
   const price = parseFloat(document.getElementById('pkgPrice').value) || 0;
@@ -661,38 +787,25 @@ function deletePackage(id) {
   refreshAll();
 }
 
-// ==================== LẤY VỊ TRÍ (FORM) ====================
-function getMyLocation() {
-  if (!navigator.geolocation) return alert('Trình duyệt không hỗ trợ GPS');
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      document.getElementById('cLat').value = pos.coords.latitude.toFixed(6);
-      document.getElementById('cLng').value = pos.coords.longitude.toFixed(6);
-      alert('Đã lấy toạ độ');
-    },
-    err => alert('Không lấy được vị trí: ' + err.message),
-    { enableHighAccuracy: true, timeout: 15000 }
-  );
-}
-function getMyLocationPoint() {
+// ==================== GPS CHO FORM ====================
+function getMyLocation(target) {
   if (!navigator.geolocation) return alert('Không hỗ trợ GPS');
   navigator.geolocation.getCurrentPosition(
     pos => {
-      document.getElementById('pLat').value = pos.coords.latitude.toFixed(6);
-      document.getElementById('pLng').value = pos.coords.longitude.toFixed(6);
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      if (target === 'p') document.getElementById('pCoord').value = formatCoord(lat, lng);
+      else document.getElementById('cCoord').value = formatCoord(lat, lng);
+      alert('Đã lấy toạ độ: ' + formatCoord(lat, lng));
+      map.setView([lat, lng], 18);
     },
-    err => alert('Lỗi: ' + err.message),
+    err => alert('Lỗi GPS: ' + err.message + '\nKiểm tra Cài đặt → Safari → Vị trí'),
     { enableHighAccuracy: true, timeout: 15000 }
   );
 }
 
-// ==================== IMPORT / EXPORT ====================
+// ==================== IMPORT/EXPORT ====================
 function exportData() {
-  const data = {
-    customers: load(DB.customers),
-    points: load(DB.points),
-    packages: load(DB.packages)
-  };
+  const data = { customers: load(DB.customers), points: load(DB.points), packages: load(DB.packages) };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -716,7 +829,7 @@ function importData(e) {
   reader.readAsText(file);
 }
 function resetAll() {
-  if (!confirm('XOÁ TOÀN BỘ dữ liệu khách hàng, tập điểm, gói cước?')) return;
+  if (!confirm('XOÁ TOÀN BỘ dữ liệu?')) return;
   localStorage.removeItem(DB.customers);
   localStorage.removeItem(DB.points);
   localStorage.removeItem(DB.packages);
@@ -729,6 +842,8 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
+  // Kích hoạt chế độ bấm bản đồ để lấy toạ độ
+  tempPinMode = (name === 'points') ? 'p' : (name === 'customers' ? 'c' : null);
   setTimeout(() => map && map.invalidateSize(), 100);
 }
 
@@ -737,10 +852,10 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   if (!map) initMap();
   setTimeout(() => map.invalidateSize(), 200);
+  tempPinMode = 'c'; // mặc định cho tab khách hàng
   refreshAll();
 }
 
-// ==================== KHỞI CHẠY ====================
 window.onload = () => {
   if (localStorage.getItem('logged') === '1') showApp();
 };
