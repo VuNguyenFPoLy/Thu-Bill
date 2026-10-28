@@ -209,11 +209,62 @@ function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 // ==================== BẢN ĐỒ ====================
 let map, markersLayer;
 function initMap() {
-  map = L.map('map').setView([10.7769, 106.7009], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap'
-  }).addTo(map);
+  map = L.map('map', { zoomControl: true }).setView([10.7769, 106.7009], 12);
+
+  // ---- Bản đồ đường phố: OpenStreetMap (nét đến zoom 19) ----
+  layers.default = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    maxNativeZoom: 19,
+    attribution: '© OpenStreetMap'
+  });
+
+  // ---- Vệ tinh: Google Satellite (nét đến zoom 20) ----
+  layers.satellite = L.tileLayer(
+    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    maxNativeZoom: 20,
+    attribution: '© Google Satellite'
+  });
+
+  // ---- Vệ tinh có nhãn đường (tùy chọn, đẹp hơn) ----
+  layers.hybrid = L.layerGroup([
+    L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 20, maxNativeZoom: 20
+    }),
+    L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', {
+      maxZoom: 20, maxNativeZoom: 20, opacity: 0.8
+    })
+  ]);
+
+  layers.default.addTo(map);
   markersLayer = L.layerGroup().addTo(map);
+}
+
+let currentLayer = 'default';
+
+function toggleLayer() {
+  // Xoá lớp hiện tại
+  if (currentLayer === 'default') map.removeLayer(layers.default);
+  else if (currentLayer === 'satellite') map.removeLayer(layers.satellite);
+  else if (currentLayer === 'hybrid') map.removeLayer(layers.hybrid);
+
+  // Chuyển sang lớp kế tiếp
+  if (currentLayer === 'default') {
+    layers.satellite.addTo(map);
+    currentLayer = 'satellite';
+    document.getElementById('btnLayer').textContent = '🛰️';
+    document.getElementById('btnLayer').title = 'Vệ tinh — bấm để xem có nhãn';
+  } else if (currentLayer === 'satellite') {
+    layers.hybrid.addTo(map);
+    currentLayer = 'hybrid';
+    document.getElementById('btnLayer').textContent = '🗺️';
+    document.getElementById('btnLayer').title = 'Vệ tinh có nhãn — bấm để về bản đồ';
+  } else {
+    layers.default.addTo(map);
+    currentLayer = 'default';
+    document.getElementById('btnLayer').textContent = '🗺️';
+    document.getElementById('btnLayer').title = 'Bản đồ — bấm để xem vệ tinh';
+  }
 }
 
 // ==================== MÀU THEO TRẠNG THÁI ====================
