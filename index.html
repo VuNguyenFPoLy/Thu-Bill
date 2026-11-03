@@ -200,8 +200,9 @@
         <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation('p')">📍 Lấy vị trí hiện tại</button>
       </div>
       <div class="form-group">
-        <label>Hình ảnh</label>
-        <input id="pImage" type="file" accept="image/*" capture="environment">
+        <label>📸 Hình ảnh tập điểm</label>
+        <input id="pImage" type="file" accept="image/*" capture="environment" onchange="previewPImage(event)">
+        <div class="hint">Chụp hoặc chọn ảnh (tự nén để tiết kiệm dung lượng)</div>
         <div id="pImagePreview" style="margin-top:6px"></div>
       </div>
       <button class="btn" style="width:100%" id="pSubmitBtn" onclick="submitPoint()">Lưu tập điểm</button>
@@ -629,7 +630,7 @@ function zoomToPoint(id) {
 // ==================== FORM KHÁCH HÀNG ====================
 let editingCustomerId = null;
 let editingCustomerImage = ''; // ảnh cũ khi sửa (giữ nếu không chọn mới)
-let pendingCustomerImage = ''; // ảnh mới vừa chọn;
+let pendingCustomerImage = ''; // ảnh mới vừa chọn
 
 // Nén ảnh xuống ~80KB, max 800px, chất lượng 0.7 → tiết kiệm LocalStorage
 function compressImage(file, maxSize = 800, quality = 0.7) {
@@ -773,6 +774,27 @@ function deleteCustomer(id) {
 // ==================== FORM TẬP ĐIỂM ====================
 let editingPointId = null;
 let editingPointImage = '';
+let pendingPointImage = '';   // ảnh mới vừa chọn cho tập điểm
+
+function previewPImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  compressImage(file).then(dataUrl => {
+    pendingPointImage = dataUrl;
+    document.getElementById('pImagePreview').innerHTML =
+      `<div class="img-preview">
+        <img src="${dataUrl}">
+        <button class="btn-remove" onclick="removePImage()">×</button>
+      </div>`;
+  }).catch(() => alert('Không đọc được ảnh'));
+}
+
+function removePImage() {
+  pendingPointImage = '';
+  editingPointImage = '';
+  document.getElementById('pImage').value = '';
+  document.getElementById('pImagePreview').innerHTML = '';
+}
 
 function submitPoint() {
   const name = document.getElementById('pName').value.trim();
@@ -780,32 +802,28 @@ function submitPoint() {
   if (!name) return alert('Nhập tên tập điểm');
   if (!coord) return alert('Toạ độ không hợp lệ. VD: (10.2563648, 106.3661320)');
 
-  const file = document.getElementById('pImage').files[0];
-  const finish = (imgData) => {
-    const list = load(DB.points);
-    if (editingPointId) {
-      const p = list.find(x => x.id === editingPointId);
-      if (p) { Object.assign(p, {name, lat:coord.lat, lng:coord.lng, image: imgData || p.image || ''}); }
-      alert('Đã cập nhật tập điểm');
-    } else {
-      list.push({ id:'p_'+Date.now(), name, lat:coord.lat, lng:coord.lng, image: imgData || '' });
-      alert('Đã thêm tập điểm');
-    }
-    save(DB.points, list);
-    resetPointForm();
-    refreshAll();
-    map.setView([coord.lat, coord.lng], 18);
-  };
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = e => finish(e.target.result);
-    reader.readAsDataURL(file);
-  } else finish(editingPointImage);
+  // Ảnh: ưu tiên ảnh mới chọn, không thì giữ ảnh cũ (khi sửa)
+  const finalImage = pendingPointImage || editingPointImage || '';
+
+  const list = load(DB.points);
+  if (editingPointId) {
+    const p = list.find(x => x.id === editingPointId);
+    if (p) { Object.assign(p, {name, lat:coord.lat, lng:coord.lng, image: finalImage}); }
+    alert('Đã cập nhật tập điểm');
+  } else {
+    list.push({ id:'p_'+Date.now(), name, lat:coord.lat, lng:coord.lng, image: finalImage });
+    alert('Đã thêm tập điểm');
+  }
+  save(DB.points, list);
+  resetPointForm();
+  refreshAll();
+  map.setView([coord.lat, coord.lng], 18);
 }
 
 function resetPointForm() {
   editingPointId = null;
   editingPointImage = '';
+  pendingPointImage = '';
   document.getElementById('pName').value = '';
   document.getElementById('pCoord').value = '';
   document.getElementById('pImage').value = '';
@@ -822,11 +840,12 @@ function editPoint(id) {
   if (!p) return;
   editingPointId = id;
   editingPointImage = p.image || '';
+  pendingPointImage = '';
   document.getElementById('pName').value = p.name || '';
   document.getElementById('pCoord').value = formatCoord(p.lat, p.lng);
   document.getElementById('pImage').value = '';
   document.getElementById('pImagePreview').innerHTML = p.image
-    ? `<img src="${p.image}" style="max-width:100%;border-radius:6px;margin-top:6px">`
+    ? `<div class="img-preview"><img src="${p.image}"><button class="btn-remove" onclick="removePImage()">×</button></div>`
     : '';
   document.getElementById('pointFormTitle').textContent = '✏️ Sửa tập điểm';
   document.getElementById('pSubmitBtn').textContent = 'Cập nhật';
@@ -940,8 +959,51 @@ function showApp() {
   refreshAll();
 }
 
+// ==================== KIỂM TRA DUNG LƯỢNG ====================
+// LocalStorage giới hạn ~5MB. Cảnh báo khi dùng >80% (~4MB)
+function checkStorageSize() {
+  let total = 0;
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      total += (localStorage[key].length + key.length) * 2; // UTF-16: 2 byte/ký tự
+    }
+  }
+  const totalMB = total / (1024 * 1024);
+  if (totalMB > 4) {
+    const msg = `⚠️ Bộ nhớ gần đầy (${totalMB.toFixed(2)} / 5 MB)\n\n` +
+      `Bạn nên:\n` +
+      `1. Vào Cài đặt → Xuất dữ liệu để backup\n` +
+      `2. Xoá bớt ảnh cũ hoặc khách không còn dùng\n\n` +
+      `Nếu vượt 5MB, dữ liệu mới sẽ KHÔNG lưu được!`;
+    alert(msg);
+    return false;
+  } else if (totalMB > 3) {
+    console.warn(`Bộ nhớ đang dùng: ${totalMB.toFixed(2)} MB / 5 MB`);
+  }
+  return true;
+}
+
+// Gọi cảnh báo mỗi khi lưu dữ liệu
+const _originalSave = save;
+save = function(key, val) {
+  try {
+    _originalSave(key, val);
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      alert('❌ BỘ NHỚ ĐẦY!\n\nKhông lưu được dữ liệu mới.\n\nHãy:\n' +
+        '1. Vào Cài đặt → Xuất dữ liệu (backup)\n' +
+        '2. Xoá bớt khách/ảnh cũ\n' +
+        '3. Thử lại');
+    } else {
+      alert('Lỗi lưu dữ liệu: ' + e.message);
+    }
+  }
+};
+
 window.onload = () => {
   if (localStorage.getItem('logged') === '1') showApp();
+  // Kiểm tra dung lượng sau khi load xong
+  setTimeout(checkStorageSize, 1500);
 };
 </script>
 </body>
