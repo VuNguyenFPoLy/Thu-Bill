@@ -153,6 +153,26 @@
   }
   .history-item:last-child { border-bottom: none; }
   .history-item b { color: #1976d2; }
+  
+  /* Highlight thẻ khách khi cuộn tới */
+  .card.highlight {
+    animation: highlightPulse 2s ease-out;
+    border: 2px solid #ffc107 !important;
+  }
+  @keyframes highlightPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,193,7,0.8); background: #fff8e1; }
+    70% { box-shadow: 0 0 0 15px rgba(255,193,7,0); background: #fff8e1; }
+    100% { box-shadow: 0 1px 4px rgba(0,0,0,0.1); background: #fff; }
+  }
+
+  /* Nút trong popup marker */
+  .popup-btn {
+    display: block; width: 100%; margin-top: 8px; padding: 8px 12px;
+    background: #1976d2; color: #fff; border: none; border-radius: 6px;
+    font-size: 14px; cursor: pointer; font-weight: bold;
+  }
+  .popup-btn:active { background: #1565c0; }
+  .popup-btn.secondary { background: #fb8c00; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -544,8 +564,16 @@ function initMap() {
   map = L.map('map', { zoomControl: false }).setView([10.7769, 106.7009], 12);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  layers.default = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Lớp chính: CartoDB Voyager (ổn định hơn OSM, ít bị chặn)
+  layers.default = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, maxNativeZoom: 20,
+    attribution: '© OpenStreetMap © CARTO',
+    subdomains: 'abcd'
+  });
+  // Lớp dự phòng nếu CartoDB lỗi: OSM
+  layers.osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, maxNativeZoom: 19, attribution: '© OpenStreetMap'
+  });
   });
   layers.satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
     maxZoom: 20, maxNativeZoom: 20, attribution: '© Google Satellite'
@@ -922,8 +950,84 @@ function renderMap() {
       className: '', iconSize: [18,18]
     });
     const m = L.marker([c.lat, c.lng], {icon}).addTo(markersLayer);
-    m.bindPopup(`<b>${c.name}</b><br>📞 ${c.phone||'-'}`);
+    const statusTxt = statusLabel(c).replace(/<[^>]+>/g, ''); // bỏ HTML
+    m.bindPopup(`
+      <div style="min-width:180px">
+        <b style="font-size:15px">${c.name}</b><br>
+        ${c.contract ? `<small>📄 ${c.contract}</small><br>` : ''}
+        <small>📞 ${c.phone || '-'}</small><br>
+        <small>${statusTxt}</small>
+        <button class="popup-btn" onclick="event.stopPropagation();scrollToCustomerCard('${c.id}')">
+          👁 Xem thẻ khách
+        </button>
+        <button class="popup-btn secondary" onclick="event.stopPropagation();filterSingleCustomer('${c.id}')">
+          🎯 Chỉ xem khách này
+        </button>
+      </div>
+    `, { maxWidth: 240 });
   });
+}
+
+// Cuộn xuống thẻ khách hàng + highlight
+function scrollToCustomerCard(id) {
+  // Đóng popup bản đồ
+  map.closePopup();
+
+  // Đảm bảo đang ở tab Khách hàng
+  const custTab = document.getElementById('tab-customers');
+  if (!custTab.classList.contains('active')) {
+    const btn = document.querySelectorAll('.tabs button')[0];
+    switchTab('customers', btn);
+  }
+
+  // Đợi render xong rồi cuộn
+  setTimeout(() => {
+    // Tìm thẻ khách trong cả 3 danh sách
+    const allCards = document.querySelectorAll('#customerListUnpaid .card, #customerListPaid .card, #customerListCancelled .card');
+    let targetCard = null;
+    allCards.forEach(card => {
+      const onclickAttr = card.getAttribute('onclick') || '';
+      if (onclickAttr.includes(`'${id}'`)) targetCard = card;
+    });
+
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetCard.classList.add('highlight');
+      setTimeout(() => targetCard.classList.remove('highlight'), 2200);
+    } else {
+      alert('Không tìm thấy thẻ khách hàng. Có thể khách đã bị xoá.');
+    }
+  }, 150);
+}
+
+// Chỉ hiển thị 1 khách hàng duy nhất
+function filterSingleCustomer(id) {
+  map.closePopup();
+  const c = load(DB.customers).find(x => x.id === id);
+  if (!c) return;
+
+  // Chuyển sang tab khách hàng
+  const custTab = document.getElementById('tab-customers');
+  if (!custTab.classList.contains('active')) {
+    const btn = document.querySelectorAll('.tabs button')[0];
+    switchTab('customers', btn);
+  }
+
+  // Điền tên khách vào ô tìm kiếm để lọc
+  setTimeout(() => {
+    const searchInput = document.getElementById('searchCustomerList');
+    if (searchInput) {
+      // Ưu tiên tìm theo mã HĐ (chính xác nhất), nếu không có thì dùng tên
+      searchInput.value = c.contract || c.name;
+      renderCustomers();
+    }
+
+    // Cuộn xuống danh sách
+    setTimeout(() => {
+      const list = document.getElementById('customerListUnpaid');
+      if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, 150);
 }
 
 function zoomToCustomer(id) {
