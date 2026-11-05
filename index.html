@@ -53,7 +53,6 @@
   .search-item:active { background: #f0f0f0; }
   .search-item:last-child { border-bottom: none; }
 
-  /* Zoom control xuống góc phải dưới, không che ô tìm kiếm */
   .leaflet-bottom.leaflet-right { bottom: 50%; margin-bottom: -60px; margin-right: 55px; }
 
   .tabs { display: flex; background: #fff; border-bottom: 1px solid #ddd; }
@@ -64,6 +63,8 @@
   .card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
   .card h4 { margin: 0 0 6px; }
   .card small { color: #666; }
+  .card.clickable { cursor: pointer; transition: box-shadow 0.15s, transform 0.15s; }
+  .card.clickable:active { box-shadow: 0 3px 10px rgba(25,118,210,0.3); transform: scale(0.99); }
   .form-group { margin-bottom: 10px; }
   .form-group label { display: block; font-size: 13px; margin-bottom: 4px; color: #555; }
   .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
@@ -77,17 +78,16 @@
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 11px; }
   .list-actions { display: flex; gap: 6px; margin-top: 8px; }
   .list-actions button { flex: 1; padding: 6px; font-size: 13px; border: none; border-radius: 5px; }
-  .section-title { font-weight: bold; margin: 14px 0 8px; color: #333; }
+  .section-title { font-weight: bold; margin: 14px 0 8px; color: #333; font-size: 15px; }
+  .section-title.big { font-size: 16px; padding: 8px 12px; border-radius: 8px; margin-top: 18px; }
+  .section-title.unpaid { background: #ffebee; color: #c62828; }
+  .section-title.paid { background: #e8f5e9; color: #2e7d32; }
+  .section-title.cancelled { background: #fff3e0; color: #e65100; }
   .hidden { display: none; }
   .edit-mode { background: #fff8e1 !important; border: 2px solid #ffc107 !important; }
   .hint { font-size: 11px; color: #888; margin-top: 3px; }
-  .img-preview {
-    position: relative; display: inline-block; margin-top: 8px;
-  }
-  .img-preview img {
-    max-width: 100%; max-height: 200px; border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  }
+  .img-preview { position: relative; display: inline-block; margin-top: 8px; }
+  .img-preview img { max-width: 100%; max-height: 200px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
   .img-preview .btn-remove {
     position: absolute; top: 4px; right: 4px;
     background: rgba(229,57,53,0.9); color: #fff; border: none;
@@ -99,6 +99,16 @@
     max-width: 100%; max-height: 200px; border-radius: 8px;
     margin-top: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   }
+  .distance { display: inline-block; padding: 3px 10px; border-radius: 12px; background: #e3f2fd; color: #1565c0; font-size: 12px; margin-top: 6px; font-weight: bold; }
+  .empty-msg { padding: 16px; text-align: center; color: #999; font-size: 13px; background: #fff; border-radius: 10px; margin-bottom: 10px; }
+
+  /* Ô tìm kiếm trong danh sách */
+  .list-search {
+    width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 20px;
+    font-size: 14px; margin-bottom: 10px; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .list-search:focus { outline: none; border-color: #1976d2; }
 </style>
 </head>
 <body>
@@ -124,15 +134,14 @@
   <div id="mapWrapper">
     <div id="map"></div>
 
-    <!-- Ô tìm kiếm -->
+    <!-- Ô tìm kiếm địa chỉ trên bản đồ -->
     <div id="searchBox">
-      <input id="searchInput" placeholder="🔍 Tìm địa chỉ..." 
+      <input id="searchInput" placeholder="🔍 Tìm địa chỉ, toạ độ..." 
              onkeydown="if(event.key==='Enter') searchPlace()">
       <button id="btnSearch" onclick="searchPlace()">🔍</button>
     </div>
     <div id="searchResults"></div>
 
-    <!-- Nút định vị + đổi lớp -->
     <button class="map-btn" id="btnLocate" onclick="locateMe()" title="Vị trí hiện tại">🎯</button>
     <button class="map-btn" id="btnLayer" onclick="toggleLayer()" title="Đổi lớp bản đồ">🗺️</button>
   </div>
@@ -159,15 +168,16 @@
       <div class="form-group"><label>Tên khách hàng</label><input id="cName"></div>
       <div class="form-group"><label>Số điện thoại</label><input id="cPhone" type="tel"></div>
       <div class="form-group"><label>Gói cước</label><select id="cPackage"></select></div>
+      <div class="form-group"><label>Giá cước (VNĐ)</label><input id="cPrice" type="number" placeholder="VD: 200000"></div>
       <div class="form-group"><label>Tập điểm</label><select id="cPoint"></select></div>
       <div class="form-group">
-        <label>Toạ độ</label>
-        <input id="cCoord" placeholder="VD: (10.2563648, 106.3661320) hoặc 10.2563648,106.3661320">
-        <div class="hint">Dán từ Google Maps, có dấu ngoặc hay không đều được</div>
+        <label>Toạ độ (không bắt buộc)</label>
+        <input id="cCoord" placeholder="VD: (10.2563648, 106.3661320) - có thể để trống">
+        <div class="hint">Có thể bỏ trống. Nếu trống, khách không hiện trên bản đồ</div>
         <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation('c')">📍 Lấy vị trí hiện tại</button>
       </div>
       <div class="form-group"><label>Ngày cần thu bill</label><input id="cBillDate" type="date"></div>
-<div class="form-group"><label>Trạng thái</label>
+      <div class="form-group"><label>Trạng thái</label>
         <select id="cStatus">
           <option value="pending">Chưa thu</option>
           <option value="paid">Đã đóng</option>
@@ -184,8 +194,22 @@
       <button class="btn gray hidden" style="width:100%;margin-top:6px" id="cCancelBtn" onclick="cancelCustomerEdit()">Huỷ sửa</button>
     </div>
 
-    <div class="section-title">📋 Danh sách khách hàng</div>
-    <div id="customerList"></div>
+    <!-- TÌM KIẾM KHÁCH HÀNG -->
+    <input id="searchCustomerList" class="list-search" placeholder="🔍 Tìm khách hàng theo tên, SĐT, tập điểm..."
+           oninput="renderCustomers()">
+
+    <!-- CHƯA THU -->
+    <div class="section-title big unpaid">🔴 CHƯA THU (<span id="countUnpaid">0</span>)</div>
+    <div class="hint" style="margin-bottom:8px">Sắp xếp từ gần đến xa vị trí hiện tại. Nhấn vào thẻ để xem trên bản đồ</div>
+    <div id="customerListUnpaid"></div>
+
+    <!-- ĐÃ THU -->
+    <div class="section-title big paid">✅ ĐÃ THU (<span id="countPaid">0</span>)</div>
+    <div id="customerListPaid"></div>
+
+    <!-- HUỶ -->
+    <div class="section-title big cancelled">🚫 HUỶ / KHÔNG THU (<span id="countCancelled">0</span>)</div>
+    <div id="customerListCancelled"></div>
   </div>
 
   <!-- TAB TẬP ĐIỂM -->
@@ -195,7 +219,7 @@
       <div class="form-group"><label>Tên tập điểm</label><input id="pName" placeholder="VD: Chung cư A, hẻm 5..."></div>
       <div class="form-group">
         <label>Toạ độ</label>
-        <input id="pCoord" placeholder="VD: (10.2563648, 106.3661320) hoặc 10.2563648,106.3661320">
+        <input id="pCoord" placeholder="VD: (10.2563648, 106.3661320)">
         <div class="hint">Dán từ Google Maps, có dấu ngoặc hay không đều được</div>
         <button class="btn gray" style="margin-top:6px;width:100%" onclick="getMyLocation('p')">📍 Lấy vị trí hiện tại</button>
       </div>
@@ -209,7 +233,12 @@
       <button class="btn gray hidden" style="width:100%;margin-top:6px" id="pCancelBtn" onclick="cancelPointEdit()">Huỷ sửa</button>
     </div>
 
+    <!-- TÌM KIẾM TẬP ĐIỂM -->
+    <input id="searchPointList" class="list-search" placeholder="🔍 Tìm tập điểm theo tên..."
+           oninput="renderPoints()">
+
     <div class="section-title">📌 Danh sách tập điểm</div>
+    <div class="hint" style="margin-bottom:8px">Nhấn vào thẻ để xem trên bản đồ</div>
     <div id="pointList"></div>
   </div>
 
@@ -218,7 +247,6 @@
     <div class="card">
       <div class="section-title">➕ Thêm gói cước</div>
       <div class="form-group"><label>Tên gói</label><input id="pkgName" placeholder="VD: Internet 150Mbps"></div>
-      <div class="form-group"><label>Giá tiền (VNĐ)</label><input id="pkgPrice" type="number"></div>
       <button class="btn" style="width:100%" onclick="addPackage()">Lưu gói cước</button>
     </div>
     <div class="section-title">💰 Danh sách gói cước</div>
@@ -280,11 +308,23 @@ function load(key, def=[]) {
 }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
+// Ghi đè save để bắt lỗi đầy bộ nhớ
+const _originalSave = save;
+save = function(key, val) {
+  try {
+    _originalSave(key, val);
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      alert('❌ BỘ NHỚ ĐẦY!\n\nHãy backup (Cài đặt → Xuất dữ liệu) rồi xoá bớt khách/ảnh cũ.');
+    } else {
+      alert('Lỗi lưu dữ liệu: ' + e.message);
+    }
+  }
+};
+
 // ==================== PARSE TOẠ ĐỘ ====================
-// Nhận: "(10.25, 106.36)", "10.25,106.36", "10.25 106.36", "10.25; 106.36"
 function parseCoord(str) {
-  if (!str) return null;
-  // Bỏ ngoặc, đổi dấu phẩy/chấm phẩy thành khoảng trắng
+  if (!str || !str.trim()) return null;
   const cleaned = str.replace(/[()\[\]]/g, ' ').replace(/[,;]/g, ' ').trim();
   const parts = cleaned.split(/\s+/).filter(x => x);
   if (parts.length < 2) return null;
@@ -298,6 +338,20 @@ function formatCoord(lat, lng) {
   return `(${lat.toFixed(6)}, ${lng.toFixed(6)})`;
 }
 
+// ==================== KHOẢNG CÁCH ====================
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function formatDistance(meters) {
+  if (meters < 1000) return Math.round(meters) + ' m';
+  return (meters / 1000).toFixed(1) + ' km';
+}
+
 // ==================== BẢN ĐỒ ====================
 let map, markersLayer;
 let layers = {};
@@ -305,12 +359,11 @@ let currentLayer = 'default';
 let userMarker = null, userAccuracy = null;
 let searchMarker = null;
 let tempPinMarker = null;
-let tempPinMode = null; // 'c' hoặc 'p'
+let tempPinMode = null;
+let currentUserPos = null;
 
 function initMap() {
-  // zoomControl: false → ta tự đặt vị trí
   map = L.map('map', { zoomControl: false }).setView([10.7769, 106.7009], 12);
-  // Đặt zoom control góc phải dưới, tách khỏi ô tìm kiếm
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   layers.default = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -327,14 +380,12 @@ function initMap() {
   layers.default.addTo(map);
   markersLayer = L.layerGroup().addTo(map);
 
-  // Bấm bản đồ để đặt ghim tạm
   map.on('click', e => {
     if (!tempPinMode) return;
     placeTempPin(e.latlng.lat, e.latlng.lng, tempPinMode);
   });
 }
 
-// Đặt ghim tạm khi bấm bản đồ
 function placeTempPin(lat, lng, mode) {
   if (tempPinMarker) map.removeLayer(tempPinMarker);
   const icon = L.divIcon({
@@ -386,6 +437,7 @@ function locateMe() {
   navigator.geolocation.getCurrentPosition(
     pos => {
       const { latitude:lat, longitude:lng, accuracy:acc } = pos.coords;
+      currentUserPos = { lat, lng };
       if (userMarker) map.removeLayer(userMarker);
       if (userAccuracy) map.removeLayer(userAccuracy);
       userAccuracy = L.circle([lat, lng], { radius: acc, color:'#1976d2', fillColor:'#2196f3', fillOpacity:0.15, weight:1 }).addTo(map);
@@ -397,15 +449,27 @@ function locateMe() {
         .bindPopup(`<b>📍 Vị trí của bạn</b><br>±${Math.round(acc)} m`).openPopup();
       map.setView([lat, lng], 17);
       btn.textContent = '🎯';
+      renderCustomers();
     },
     err => { btn.textContent = '🎯'; alert('Lỗi GPS: ' + err.message); },
     { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
   );
 }
 
-// ==================== TÌM KIẾM ====================
+function autoGetLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      currentUserPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      renderCustomers();
+    },
+    err => { console.warn('Không lấy được GPS tự động:', err.message); },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+  );
+}
+
+// ==================== TÌM KIẾM ĐỊA CHỈ TRÊN BẢN ĐỒ ====================
 function cleanSearchQuery(q) {
-  // Bỏ ngoặc và ký tự thừa nếu người dùng dán toạ độ
   return q.replace(/[()\[\]]/g, ' ').replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
@@ -413,7 +477,6 @@ function searchPlace() {
   const raw = document.getElementById('searchInput').value.trim();
   if (!raw) return;
 
-  // Nếu là toạ độ → bay thẳng tới, không cần gọi Nominatim
   const coord = parseCoord(raw);
   if (coord) {
     if (searchMarker) map.removeLayer(searchMarker);
@@ -487,7 +550,7 @@ document.addEventListener('click', e => {
   if (!box.contains(e.target) && e.target !== input) box.style.display = 'none';
 });
 
-// ==================== MÀU ====================
+// ==================== MÀU TRẠNG THÁI ====================
 function getColor(c) {
   if (c.status === 'cancelled') return '#fb8c00';
   if (c.status === 'paid') return '#2979ff';
@@ -529,52 +592,147 @@ function statusLabel(c) {
   return `<span class="badge" style="background:#43a047">Còn ${diff} ngày</span>`;
 }
 
+// Render 1 thẻ khách hàng
+function renderCustomerCard(c, packages, points, showDistance) {
+  const pkg = packages.find(p => p.id === c.packageId);
+  const pt = points.find(p => p.id === c.pointId);
+  let distanceHtml = '';
+  if (showDistance && currentUserPos && c.lat && c.lng) {
+    const d = haversine(currentUserPos.lat, currentUserPos.lng, c.lat, c.lng);
+    distanceHtml = `<div class="distance">📏 ${formatDistance(d)}</div>`;
+  }
+  return `<div class="card clickable" onclick="onCustomerCardClick(event, '${c.id}')">
+    <h4>${c.name} ${statusLabel(c)}</h4>
+    <small>📞 ${c.phone || '-'}<br>
+    📦 ${pkg ? pkg.name : '-'}${c.price ? ' - ' + Number(c.price).toLocaleString('vi-VN') + ' đ' : ''}<br>
+    📍 ${pt ? pt.name : '-'}<br>
+    ${c.lat && c.lng ? `🗺️ ${formatCoord(c.lat, c.lng)}<br>` : '<i style="color:#999">🗺️ Chưa có toạ độ</i><br>'}
+    📅 ${c.billDate || '-'}</small>
+    ${distanceHtml}
+    ${c.image ? `<img src="${c.image}" class="customer-img">` : ''}
+    <div class="list-actions">
+      ${c.lat && c.lng ? `<button class="btn" style="background:#43a047" onclick="event.stopPropagation();zoomToCustomer('${c.id}')">📍 Xem</button>` : ''}
+      ${c.status !== 'paid' ? `<button class="btn" style="background:#1976d2" onclick="event.stopPropagation();markPaid('${c.id}')">Đã đóng</button>` : ''}
+      ${c.status !== 'cancelled' ? `<button class="btn" style="background:#fb8c00" onclick="event.stopPropagation();markCancel('${c.id}')">Huỷ</button>` : ''}
+      ${c.status !== 'pending' ? `<button class="btn gray" onclick="event.stopPropagation();markPending('${c.id}')">↩ Chưa thu</button>` : ''}
+    </div>
+    <div class="list-actions">
+      <button class="btn gray" style="background:#ff9800" onclick="event.stopPropagation();editCustomer('${c.id}')">✏️ Sửa</button>
+      <button class="btn red" onclick="event.stopPropagation();deleteCustomer('${c.id}')">🗑 Xoá</button>
+    </div>
+  </div>`;
+}
+
+// Click thẻ → cuộn lên bản đồ + bay tới vị trí
+function onCustomerCardClick(event, id) {
+  if (event.target.tagName === 'BUTTON') return;
+  const c = load(DB.customers).find(x => x.id === id);
+  if (!c) return;
+  if (c.lat && c.lng) {
+    map.setView([c.lat, c.lng], 18);
+    // Cuộn lên bản đồ
+    document.getElementById('mapWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Hiện popup
+    const color = getColor(c);
+    L.popup()
+      .setLatLng([c.lat, c.lng])
+      .setContent(`<b>${c.name}</b><br>📞 ${c.phone||'-'}<br>📅 ${c.billDate||'-'}`)
+      .openOn(map);
+  } else {
+    alert('Khách hàng này chưa có toạ độ, không xem trên bản đồ được.');
+  }
+}
+
+function onPointCardClick(event, id) {
+  if (event.target.tagName === 'BUTTON') return;
+  const p = load(DB.points).find(x => x.id === id);
+  if (!p) return;
+  if (p.lat && p.lng) {
+    map.setView([p.lat, p.lng], 18);
+    document.getElementById('mapWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    L.popup()
+      .setLatLng([p.lat, p.lng])
+      .setContent(`<b>📌 ${p.name}</b>`)
+      .openOn(map);
+  }
+}
+
 function renderCustomers() {
   const list = load(DB.customers), packages = load(DB.packages), points = load(DB.points);
-  const el = document.getElementById('customerList');
-  if (!list.length) { el.innerHTML = '<div class="card"><small>Chưa có khách hàng.</small></div>'; return; }
-  const sorted = [...list].sort((a,b) => (a.billDate||'').localeCompare(b.billDate||''));
-  el.innerHTML = sorted.map(c => {
-    const pkg = packages.find(p => p.id === c.packageId);
+  const q = (document.getElementById('searchCustomerList')?.value || '').toLowerCase().trim();
+
+  // Lọc theo từ khoá
+  const filtered = q ? list.filter(c => {
     const pt = points.find(p => p.id === c.pointId);
-    return `<div class="card">
-      <h4>${c.name} ${statusLabel(c)}</h4>
-      <small>📞 ${c.phone || '-'}<br>
-      📦 ${pkg ? pkg.name : '-'}<br>
-      📍 ${pt ? pt.name : '-'}<br>
-      🗺️ ${formatCoord(c.lat, c.lng)}<br>
-      📅 ${c.billDate || '-'}</small>
-      ${c.image ? `<img src="${c.image}" class="customer-img">` : ''}
-      <div class="list-actions">
-        <button class="btn" style="background:#43a047" onclick="zoomToCustomer('${c.id}')">📍 Xem</button>
-        <button class="btn" style="background:#1976d2" onclick="markPaid('${c.id}')">Đã đóng</button>
-        <button class="btn" style="background:#fb8c00" onclick="markCancel('${c.id}')">Huỷ</button>
-      </div>
-      <div class="list-actions">
-        <button class="btn gray" style="background:#ff9800" onclick="editCustomer('${c.id}')">✏️ Sửa</button>
-        <button class="btn red" onclick="deleteCustomer('${c.id}')">🗑 Xoá</button>
-      </div>
-    </div>`;
-  }).join('');
+    return (c.name || '').toLowerCase().includes(q) ||
+           (c.phone || '').toLowerCase().includes(q) ||
+           (pt && pt.name.toLowerCase().includes(q));
+  }) : list;
+
+  // Phân loại
+  const unpaid = filtered.filter(c => c.status === 'pending' || !c.status);
+  const paid = filtered.filter(c => c.status === 'paid');
+  const cancelled = filtered.filter(c => c.status === 'cancelled');
+
+  // Sắp xếp chưa thu: gần → xa (nếu có GPS), xa/không toạ độ xuống cuối
+  unpaid.sort((a, b) => {
+    if (currentUserPos) {
+      const da = (a.lat && a.lng) ? haversine(currentUserPos.lat, currentUserPos.lng, a.lat, a.lng) : Infinity;
+      const db = (b.lat && b.lng) ? haversine(currentUserPos.lat, currentUserPos.lng, b.lat, b.lng) : Infinity;
+      return da - db;
+    }
+    return (a.billDate||'').localeCompare(b.billDate||'');
+  });
+
+  // Đã thu: mới nhất lên đầu (theo ngày bill giảm dần)
+  paid.sort((a, b) => (b.billDate||'').localeCompare(a.billDate||''));
+
+  // Huỷ: theo tên
+  cancelled.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+
+  // Cập nhật số lượng
+  document.getElementById('countUnpaid').textContent = unpaid.length;
+  document.getElementById('countPaid').textContent = paid.length;
+  document.getElementById('countCancelled').textContent = cancelled.length;
+
+  // Render từng section
+  document.getElementById('customerListUnpaid').innerHTML = unpaid.length
+    ? unpaid.map(c => renderCustomerCard(c, packages, points, true)).join('')
+    : `<div class="empty-msg">${q ? 'Không tìm thấy khách chưa thu phù hợp' : 'Chưa có khách chưa thu'}</div>`;
+
+  document.getElementById('customerListPaid').innerHTML = paid.length
+    ? paid.map(c => renderCustomerCard(c, packages, points, false)).join('')
+    : `<div class="empty-msg">${q ? 'Không tìm thấy khách đã thu phù hợp' : 'Chưa có khách đã thu'}</div>`;
+
+  document.getElementById('customerListCancelled').innerHTML = cancelled.length
+    ? cancelled.map(c => renderCustomerCard(c, packages, points, false)).join('')
+    : `<div class="empty-msg">${q ? 'Không tìm thấy khách huỷ phù hợp' : 'Chưa có khách huỷ'}</div>`;
 }
 
 function renderPoints() {
   const list = load(DB.points), customers = load(DB.customers);
+  const q = (document.getElementById('searchPointList')?.value || '').toLowerCase().trim();
+  const filtered = q ? list.filter(p => (p.name||'').toLowerCase().includes(q)) : list;
+  filtered.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
   const el = document.getElementById('pointList');
-  if (!list.length) { el.innerHTML = '<div class="card"><small>Chưa có tập điểm.</small></div>'; return; }
-  el.innerHTML = list.map(p => {
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-msg">${q ? 'Không tìm thấy tập điểm phù hợp' : 'Chưa có tập điểm'}</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(p => {
     const count = customers.filter(c => c.pointId === p.id).length;
-    return `<div class="card">
+    return `<div class="card clickable" onclick="onPointCardClick(event, '${p.id}')">
       <h4>📌 ${p.name}</h4>
       <small>🗺️ ${formatCoord(p.lat, p.lng)}<br>Số KH: ${count}</small>
       ${p.image ? `<div style="margin-top:8px"><img src="${p.image}" style="max-width:100%;border-radius:6px"></div>` : ''}
       <div class="list-actions">
-        <button class="btn" style="background:#43a047" onclick="zoomToPoint('${p.id}')">📍 Xem</button>
-        <button class="btn" style="background:#1976d2" onclick="viewPointCustomers('${p.id}')">👥 KH</button>
+        <button class="btn" style="background:#43a047" onclick="event.stopPropagation();zoomToPoint('${p.id}')">📍 Xem</button>
+        <button class="btn" style="background:#1976d2" onclick="event.stopPropagation();viewPointCustomers('${p.id}')">👥 KH</button>
       </div>
       <div class="list-actions">
-        <button class="btn" style="background:#ff9800" onclick="editPoint('${p.id}')">✏️ Sửa</button>
-        <button class="btn red" onclick="deletePoint('${p.id}')">🗑 Xoá</button>
+        <button class="btn" style="background:#ff9800" onclick="event.stopPropagation();editPoint('${p.id}')">✏️ Sửa</button>
+        <button class="btn red" onclick="event.stopPropagation();deletePoint('${p.id}')">🗑 Xoá</button>
       </div>
     </div>`;
   }).join('');
@@ -582,11 +740,11 @@ function renderPoints() {
 
 function renderPackages() {
   const list = load(DB.packages);
+  list.sort((a,b) => (a.name||'').localeCompare(b.name||''));
   const el = document.getElementById('packageList');
-  if (!list.length) { el.innerHTML = '<div class="card"><small>Chưa có gói cước.</small></div>'; return; }
+  if (!list.length) { el.innerHTML = '<div class="empty-msg">Chưa có gói cước</div>'; return; }
   el.innerHTML = list.map(p => `<div class="card">
     <h4>📦 ${p.name}</h4>
-    <small>${p.price ? Number(p.price).toLocaleString('vi-VN') + ' đ' : 'Chưa đặt giá'}</small>
     <div class="list-actions"><button class="btn red" onclick="deletePackage('${p.id}')">Xoá</button></div>
   </div>`).join('');
 }
@@ -620,19 +778,24 @@ function renderMap() {
 
 function zoomToCustomer(id) {
   const c = load(DB.customers).find(x => x.id === id);
-  if (c) map.setView([c.lat, c.lng], 18);
+  if (c && c.lat && c.lng) {
+    map.setView([c.lat, c.lng], 18);
+    document.getElementById('mapWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 function zoomToPoint(id) {
   const p = load(DB.points).find(x => x.id === id);
-  if (p) map.setView([p.lat, p.lng], 18);
+  if (p) {
+    map.setView([p.lat, p.lng], 18);
+    document.getElementById('mapWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // ==================== FORM KHÁCH HÀNG ====================
 let editingCustomerId = null;
-let editingCustomerImage = ''; // ảnh cũ khi sửa (giữ nếu không chọn mới)
-let pendingCustomerImage = ''; // ảnh mới vừa chọn
+let editingCustomerImage = '';
+let pendingCustomerImage = '';
 
-// Nén ảnh xuống ~80KB, max 800px, chất lượng 0.7 → tiết kiệm LocalStorage
 function compressImage(file, maxSize = 800, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -681,30 +844,33 @@ function submitCustomer() {
   const name = document.getElementById('cName').value.trim();
   const phone = document.getElementById('cPhone').value.trim();
   const packageId = document.getElementById('cPackage').value;
+  const price = parseFloat(document.getElementById('cPrice').value) || 0;
   const pointId = document.getElementById('cPoint').value;
-  const coord = parseCoord(document.getElementById('cCoord').value);
+  const coordRaw = document.getElementById('cCoord').value.trim();
+  const coord = coordRaw ? parseCoord(coordRaw) : null;
   const billDate = document.getElementById('cBillDate').value;
   const status = document.getElementById('cStatus').value;
 
   if (!name) return alert('Nhập tên khách hàng');
-  if (!coord) return alert('Toạ độ không hợp lệ. VD: (10.2563648, 106.3661320)');
+  if (coordRaw && !coord) return alert('Toạ độ không hợp lệ. Định dạng: (10.2563648, 106.3661320) hoặc để trống');
 
-  // Ảnh: ưu tiên ảnh mới chọn, không thì giữ ảnh cũ (khi sửa)
   const finalImage = pendingCustomerImage || editingCustomerImage || '';
+  const lat = coord ? coord.lat : null;
+  const lng = coord ? coord.lng : null;
 
   const list = load(DB.customers);
   if (editingCustomerId) {
     const c = list.find(x => x.id === editingCustomerId);
-    if (c) { Object.assign(c, {name, phone, packageId, pointId, lat:coord.lat, lng:coord.lng, billDate, status, image: finalImage}); }
+    if (c) { Object.assign(c, {name, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage}); }
     alert('Đã cập nhật khách hàng');
   } else {
-    list.push({ id:'c_'+Date.now(), name, phone, packageId, pointId, lat:coord.lat, lng:coord.lng, billDate, status, image: finalImage });
+    list.push({ id:'c_'+Date.now(), name, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage });
     alert('Đã thêm khách hàng');
   }
   save(DB.customers, list);
   resetCustomerForm();
   refreshAll();
-  map.setView([coord.lat, coord.lng], 18);
+  if (coord) map.setView([coord.lat, coord.lng], 18);
 }
 
 function resetCustomerForm() {
@@ -714,6 +880,7 @@ function resetCustomerForm() {
   document.getElementById('cName').value = '';
   document.getElementById('cPhone').value = '';
   document.getElementById('cCoord').value = '';
+  document.getElementById('cPrice').value = '';
   document.getElementById('cBillDate').value = '';
   document.getElementById('cStatus').value = 'pending';
   document.getElementById('cPackage').value = '';
@@ -736,8 +903,9 @@ function editCustomer(id) {
   document.getElementById('cName').value = c.name || '';
   document.getElementById('cPhone').value = c.phone || '';
   document.getElementById('cPackage').value = c.packageId || '';
+  document.getElementById('cPrice').value = c.price || '';
   document.getElementById('cPoint').value = c.pointId || '';
-  document.getElementById('cCoord').value = formatCoord(c.lat, c.lng);
+  document.getElementById('cCoord').value = (c.lat && c.lng) ? formatCoord(c.lat, c.lng) : '';
   document.getElementById('cBillDate').value = c.billDate || '';
   document.getElementById('cStatus').value = c.status || 'pending';
   document.getElementById('cImage').value = '';
@@ -749,7 +917,7 @@ function editCustomer(id) {
   document.getElementById('cCancelBtn').classList.remove('hidden');
   document.getElementById('customerFormCard').classList.add('edit-mode');
   document.getElementById('customerFormCard').scrollIntoView({behavior:'smooth'});
-  map.setView([c.lat, c.lng], 18);
+  if (c.lat && c.lng) map.setView([c.lat, c.lng], 18);
   tempPinMode = 'c';
 }
 
@@ -765,6 +933,11 @@ function markCancel(id) {
   const c = list.find(x => x.id === id);
   if (c) { c.status = 'cancelled'; save(DB.customers, list); refreshAll(); }
 }
+function markPending(id) {
+  const list = load(DB.customers);
+  const c = list.find(x => x.id === id);
+  if (c) { c.status = 'pending'; save(DB.customers, list); refreshAll(); }
+}
 function deleteCustomer(id) {
   if (!confirm('Xoá khách hàng này?')) return;
   save(DB.customers, load(DB.customers).filter(c => c.id !== id));
@@ -774,7 +947,7 @@ function deleteCustomer(id) {
 // ==================== FORM TẬP ĐIỂM ====================
 let editingPointId = null;
 let editingPointImage = '';
-let pendingPointImage = '';   // ảnh mới vừa chọn cho tập điểm
+let pendingPointImage = '';
 
 function previewPImage(event) {
   const file = event.target.files[0];
@@ -802,9 +975,7 @@ function submitPoint() {
   if (!name) return alert('Nhập tên tập điểm');
   if (!coord) return alert('Toạ độ không hợp lệ. VD: (10.2563648, 106.3661320)');
 
-  // Ảnh: ưu tiên ảnh mới chọn, không thì giữ ảnh cũ (khi sửa)
   const finalImage = pendingPointImage || editingPointImage || '';
-
   const list = load(DB.points);
   if (editingPointId) {
     const p = list.find(x => x.id === editingPointId);
@@ -868,20 +1039,18 @@ function viewPointCustomers(id) {
   const customers = load(DB.customers).filter(c => c.pointId === id);
   const p = load(DB.points).find(x => x.id === id);
   alert((p ? p.name + '\n\n' : '') + (customers.length
-    ? customers.map(c => '• ' + c.name + ' - ' + c.phone).join('\n')
+    ? customers.map(c => '• ' + c.name + ' - ' + c.phone + (c.price ? ' - ' + Number(c.price).toLocaleString('vi-VN') + 'đ' : '')).join('\n')
     : 'Chưa có khách hàng.'));
 }
 
 // ==================== GÓI CƯỚC ====================
 function addPackage() {
   const name = document.getElementById('pkgName').value.trim();
-  const price = parseFloat(document.getElementById('pkgPrice').value) || 0;
   if (!name) return alert('Nhập tên gói');
   const list = load(DB.packages);
-  list.push({ id:'pk_'+Date.now(), name, price });
+  list.push({ id:'pk_'+Date.now(), name });
   save(DB.packages, list);
   document.getElementById('pkgName').value = '';
-  document.getElementById('pkgPrice').value = '';
   refreshAll();
 }
 function deletePackage(id) {
@@ -945,7 +1114,6 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
-  // Kích hoạt chế độ bấm bản đồ để lấy toạ độ
   tempPinMode = (name === 'points') ? 'p' : (name === 'customers' ? 'c' : null);
   setTimeout(() => map && map.invalidateSize(), 100);
 }
@@ -955,55 +1123,14 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   if (!map) initMap();
   setTimeout(() => map.invalidateSize(), 200);
-  tempPinMode = 'c'; // mặc định cho tab khách hàng
+  tempPinMode = 'c';
   refreshAll();
+  // Tự lấy GPS để sắp xếp khoảng cách
+  setTimeout(autoGetLocation, 500);
 }
-
-// ==================== KIỂM TRA DUNG LƯỢNG ====================
-// LocalStorage giới hạn ~5MB. Cảnh báo khi dùng >80% (~4MB)
-function checkStorageSize() {
-  let total = 0;
-  for (const key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      total += (localStorage[key].length + key.length) * 2; // UTF-16: 2 byte/ký tự
-    }
-  }
-  const totalMB = total / (1024 * 1024);
-  if (totalMB > 4) {
-    const msg = `⚠️ Bộ nhớ gần đầy (${totalMB.toFixed(2)} / 5 MB)\n\n` +
-      `Bạn nên:\n` +
-      `1. Vào Cài đặt → Xuất dữ liệu để backup\n` +
-      `2. Xoá bớt ảnh cũ hoặc khách không còn dùng\n\n` +
-      `Nếu vượt 5MB, dữ liệu mới sẽ KHÔNG lưu được!`;
-    alert(msg);
-    return false;
-  } else if (totalMB > 3) {
-    console.warn(`Bộ nhớ đang dùng: ${totalMB.toFixed(2)} MB / 5 MB`);
-  }
-  return true;
-}
-
-// Gọi cảnh báo mỗi khi lưu dữ liệu
-const _originalSave = save;
-save = function(key, val) {
-  try {
-    _originalSave(key, val);
-  } catch (e) {
-    if (e.name === 'QuotaExceededError' || e.code === 22) {
-      alert('❌ BỘ NHỚ ĐẦY!\n\nKhông lưu được dữ liệu mới.\n\nHãy:\n' +
-        '1. Vào Cài đặt → Xuất dữ liệu (backup)\n' +
-        '2. Xoá bớt khách/ảnh cũ\n' +
-        '3. Thử lại');
-    } else {
-      alert('Lỗi lưu dữ liệu: ' + e.message);
-    }
-  }
-};
 
 window.onload = () => {
   if (localStorage.getItem('logged') === '1') showApp();
-  // Kiểm tra dung lượng sau khi load xong
-  setTimeout(checkStorageSize, 1500);
 };
 </script>
 </body>
