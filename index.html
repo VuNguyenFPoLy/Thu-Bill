@@ -166,9 +166,18 @@
     <div class="card" id="customerFormCard">
       <div class="section-title" id="customerFormTitle">➕ Thêm khách hàng</div>
       <div class="form-group"><label>Tên khách hàng</label><input id="cName"></div>
+      <div class="form-group">
+        <label>Mã hợp đồng</label>
+        <input id="cContract" placeholder="VD: HD2024001" style="text-transform:uppercase" oninput="this.value = this.value.toUpperCase()">
+        <div class="hint">Tự động IN HOA. Gồm chữ và số</div>
+      </div>
       <div class="form-group"><label>Số điện thoại</label><input id="cPhone" type="tel"></div>
       <div class="form-group"><label>Gói cước</label><select id="cPackage"></select></div>
-      <div class="form-group"><label>Giá cước (VNĐ)</label><input id="cPrice" type="number" placeholder="VD: 200000"></div>
+      <div class="form-group">
+        <label>Giá cước (VNĐ)</label>
+        <input id="cPrice" type="text" inputmode="numeric" placeholder="VD: 200.000" oninput="formatPriceInput(this)">
+        <div class="hint">Tự động thêm dấu chấm phân cách</div>
+      </div>
       <div class="form-group"><label>Tập điểm</label><select id="cPoint"></select></div>
       <div class="form-group">
         <label>Toạ độ (không bắt buộc)</label>
@@ -338,6 +347,27 @@ function formatCoord(lat, lng) {
   return `(${lat.toFixed(6)}, ${lng.toFixed(6)})`;
 }
 
+// Format giá: 200000 → "200.000"
+function formatPrice(num) {
+  if (!num || num === 0) return '0';
+  return Number(num).toLocaleString('vi-VN');
+}
+
+// Format khi đang gõ: bỏ ký tự không phải số, thêm dấu chấm
+function formatPriceInput(input) {
+  // Lấy chỉ chữ số
+  let raw = input.value.replace(/[^\d]/g, '');
+  if (!raw) { input.value = ''; return; }
+  // Định dạng lại với dấu chấm
+  input.value = Number(raw).toLocaleString('vi-VN');
+}
+
+// Parse giá từ chuỗi có dấu chấm: "200.000" → 200000
+function parsePrice(str) {
+  if (!str) return 0;
+  const cleaned = String(str).replace(/[^\d]/g, '');
+  return parseInt(cleaned) || 0;
+}
 // ==================== KHOẢNG CÁCH ====================
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -603,8 +633,10 @@ function renderCustomerCard(c, packages, points, showDistance) {
   }
   return `<div class="card clickable" onclick="onCustomerCardClick(event, '${c.id}')">
     <h4>${c.name} ${statusLabel(c)}</h4>
-    <small>📞 ${c.phone || '-'}<br>
-    📦 ${pkg ? pkg.name : '-'}${c.price ? ' - ' + Number(c.price).toLocaleString('vi-VN') + ' đ' : ''}<br>
+    <small>
+    ${c.contract ? `📄 <b>HĐ: ${c.contract}</b><br>` : ''}
+    📞 ${c.phone || '-'}<br>
+    📦 ${pkg ? pkg.name : '-'}${c.price ? ' - ' + formatPrice(c.price) + ' đ' : ''}<br>
     📍 ${pt ? pt.name : '-'}<br>
     ${c.lat && c.lng ? `🗺️ ${formatCoord(c.lat, c.lng)}<br>` : '<i style="color:#999">🗺️ Chưa có toạ độ</i><br>'}
     📅 ${c.billDate || '-'}</small>
@@ -661,10 +693,11 @@ function renderCustomers() {
   const list = load(DB.customers), packages = load(DB.packages), points = load(DB.points);
   const q = (document.getElementById('searchCustomerList')?.value || '').toLowerCase().trim();
 
-  // Lọc theo từ khoá
+// Lọc theo từ khoá
   const filtered = q ? list.filter(c => {
     const pt = points.find(p => p.id === c.pointId);
     return (c.name || '').toLowerCase().includes(q) ||
+           (c.contract || '').toLowerCase().includes(q) ||
            (c.phone || '').toLowerCase().includes(q) ||
            (pt && pt.name.toLowerCase().includes(q));
   }) : list;
@@ -842,9 +875,10 @@ function removeCImage() {
 
 function submitCustomer() {
   const name = document.getElementById('cName').value.trim();
+  const contract = document.getElementById('cContract').value.trim().toUpperCase();
   const phone = document.getElementById('cPhone').value.trim();
   const packageId = document.getElementById('cPackage').value;
-  const price = parseFloat(document.getElementById('cPrice').value) || 0;
+  const price = parsePrice(document.getElementById('cPrice').value);
   const pointId = document.getElementById('cPoint').value;
   const coordRaw = document.getElementById('cCoord').value.trim();
   const coord = coordRaw ? parseCoord(coordRaw) : null;
@@ -853,6 +887,10 @@ function submitCustomer() {
 
   if (!name) return alert('Nhập tên khách hàng');
   if (coordRaw && !coord) return alert('Toạ độ không hợp lệ. Định dạng: (10.2563648, 106.3661320) hoặc để trống');
+  // Mã HĐ chỉ cho chữ + số (bỏ ký tự đặc biệt nếu có)
+  if (contract && !/^[A-Z0-9]+$/.test(contract)) {
+    return alert('Mã hợp đồng chỉ được chứa chữ và số (không dấu, không ký tự đặc biệt)');
+  }
 
   const finalImage = pendingCustomerImage || editingCustomerImage || '';
   const lat = coord ? coord.lat : null;
@@ -861,10 +899,10 @@ function submitCustomer() {
   const list = load(DB.customers);
   if (editingCustomerId) {
     const c = list.find(x => x.id === editingCustomerId);
-    if (c) { Object.assign(c, {name, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage}); }
+    if (c) { Object.assign(c, {name, contract, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage}); }
     alert('Đã cập nhật khách hàng');
   } else {
-    list.push({ id:'c_'+Date.now(), name, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage });
+    list.push({ id:'c_'+Date.now(), name, contract, phone, packageId, price, pointId, lat, lng, billDate, status, image: finalImage });
     alert('Đã thêm khách hàng');
   }
   save(DB.customers, list);
@@ -878,6 +916,7 @@ function resetCustomerForm() {
   editingCustomerImage = '';
   pendingCustomerImage = '';
   document.getElementById('cName').value = '';
+  document.getElementById('cContract').value = '';
   document.getElementById('cPhone').value = '';
   document.getElementById('cCoord').value = '';
   document.getElementById('cPrice').value = '';
@@ -901,9 +940,10 @@ function editCustomer(id) {
   editingCustomerImage = c.image || '';
   pendingCustomerImage = '';
   document.getElementById('cName').value = c.name || '';
+  document.getElementById('cContract').value = c.contract || '';
   document.getElementById('cPhone').value = c.phone || '';
   document.getElementById('cPackage').value = c.packageId || '';
-  document.getElementById('cPrice').value = c.price || '';
+  document.getElementById('cPrice').value = c.price ? formatPrice(c.price) : '';
   document.getElementById('cPoint').value = c.pointId || '';
   document.getElementById('cCoord').value = (c.lat && c.lng) ? formatCoord(c.lat, c.lng) : '';
   document.getElementById('cBillDate').value = c.billDate || '';
@@ -1039,7 +1079,12 @@ function viewPointCustomers(id) {
   const customers = load(DB.customers).filter(c => c.pointId === id);
   const p = load(DB.points).find(x => x.id === id);
   alert((p ? p.name + '\n\n' : '') + (customers.length
-    ? customers.map(c => '• ' + c.name + ' - ' + c.phone + (c.price ? ' - ' + Number(c.price).toLocaleString('vi-VN') + 'đ' : '')).join('\n')
+    ? customers.map(c => 
+        '• ' + c.name + 
+        (c.contract ? ' [' + c.contract + ']' : '') +
+        ' - ' + (c.phone || '-') + 
+        (c.price ? ' - ' + formatPrice(c.price) + 'đ' : '')
+      ).join('\n')
     : 'Chưa có khách hàng.'));
 }
 
